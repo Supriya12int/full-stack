@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import '../styles/BookService.css';
 
 const BookService = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
     serviceType: '',
@@ -85,49 +87,80 @@ const BookService = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrors({});
 
     if (!validateForm()) {
+      console.log('Form validation failed');
       return;
     }
 
-    // Get service name from service type
-    const selectedService = serviceTypes.find(s => s.name === formData.serviceType);
+    if (!user || !user.id) {
+      setErrors({ submit: 'User information missing. Please log in again.' });
+      console.log('User ID missing:', user);
+      return;
+    }
 
-    // Create booking object
-    const newBooking = {
-      id: Date.now(),
-      service: formData.serviceType,
-      date: formData.date,
-      time: formData.time,
-      technician: 'Assigned Soon',
-      status: 'Pending',
-      bookingDetails: {
-        name: formData.fullName,
-        phone: formData.phone,
-        address: formData.address,
-        description: formData.description,
-        serviceType: formData.serviceType
+    setLoading(true);
+
+    try {
+      console.log('Submitting booking with user ID:', user.id);
+
+      // Get service name from service type
+      const selectedService = serviceTypes.find(s => s.name === formData.serviceType);
+
+      // Create booking object for API
+      const bookingData = {
+        service: formData.serviceType,
+        date: formData.date,
+        time: formData.time,
+        bookingDetails: {
+          name: formData.fullName,
+          phone: formData.phone,
+          address: formData.address,
+          description: formData.description,
+          serviceType: formData.serviceType
+        }
+      };
+
+      console.log('Booking data:', bookingData);
+
+      // Send to backend API
+      const response = await axios.post('http://localhost:5000/api/bookings/create', bookingData, {
+        headers: {
+          'user-id': user.id,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      console.log('Booking response:', response);
+
+      if (response.status === 201) {
+        // Also save to localStorage for backward compatibility
+        const existingBookings = localStorage.getItem('userBookings');
+        const bookings = existingBookings ? JSON.parse(existingBookings) : [];
+        bookings.push(response.data.booking);
+        localStorage.setItem('userBookings', JSON.stringify(bookings));
+
+        // Dispatch event to update dashboard
+        window.dispatchEvent(new Event('bookingUpdated'));
+
+        // Show success message
+        setSubmitted(true);
+
+        // Reset form and redirect after delay
+        setTimeout(() => {
+          navigate('/home');
+        }, 3000);
       }
-    };
-
-    // Save to localStorage
-    const existingBookings = localStorage.getItem('userBookings');
-    const bookings = existingBookings ? JSON.parse(existingBookings) : [];
-    bookings.push(newBooking);
-    localStorage.setItem('userBookings', JSON.stringify(bookings));
-
-    // Dispatch event to update dashboard
-    window.dispatchEvent(new Event('bookingUpdated'));
-
-    // Show success message
-    setSubmitted(true);
-
-    // Reset form and redirect after delay
-    setTimeout(() => {
-      navigate('/home');
-    }, 3000);
+    } catch (error) {
+      console.error('Booking error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Error creating booking';
+      setErrors({ submit: errorMessage });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -288,13 +321,14 @@ const BookService = () => {
 
             {/* Form Actions */}
             <div className="form-actions">
-              <button type="button" onClick={() => navigate('/home')} className="btn-cancel">
+              <button type="button" onClick={() => navigate('/home')} className="btn-cancel" disabled={loading}>
                 Cancel
               </button>
-              <button type="submit" className="btn-confirm">
-                Confirm Booking
+              <button type="submit" className="btn-confirm" disabled={loading}>
+                {loading ? 'Booking...' : 'Confirm Booking'}
               </button>
             </div>
+            {errors.submit && <span className="error-message">{errors.submit}</span>}
           </form>
         )}
       </div>

@@ -24,8 +24,7 @@ const Login = () => {
       });
 
       if (response.data.token) {
-        login(response.data.user);
-        localStorage.setItem('token', response.data.token);
+        login(response.data.user, response.data.token);
         navigate('/home');
       }
     } catch (err) {

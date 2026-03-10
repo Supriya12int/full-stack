@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import '../styles/AuthPages.css';
 
 const Signup = () => {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -13,10 +15,16 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!firstName.trim()) {
+      setError('First name is required');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -44,7 +52,8 @@ const Signup = () => {
 
     try {
       const response = await axios.post('http://localhost:5000/api/auth/signup', {
-        name,
+        firstName,
+        lastName,
         email,
         phone,
         address: address || null,
@@ -52,7 +61,14 @@ const Signup = () => {
       });
 
       if (response.data.message === 'User created successfully') {
-        navigate('/login');
+        // If backend provides token and user, auto-login
+        if (response.data.token && response.data.user) {
+          login(response.data.user, response.data.token);
+          navigate('/home');
+        } else {
+          // Otherwise redirect to login
+          navigate('/login');
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Signup failed. Please try again.');
@@ -67,14 +83,25 @@ const Signup = () => {
         <h1>Sign Up</h1>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="name">Full Name</label>
+            <label htmlFor="firstName">First Name *</label>
             <input
-              id="name"
+              id="firstName"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your full name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Enter your first name"
               required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="lastName">Last Name</label>
+            <input
+              id="lastName"
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Enter your last name"
             />
           </div>
 

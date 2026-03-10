@@ -2,11 +2,9 @@ const express = require('express');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const User = require('../models/User');
 
 const router = express.Router();
-
-// Mock database (in production, use MongoDB or another database)
-const users = [];
 
 // Signup route
 router.post(
@@ -14,7 +12,7 @@ router.post(
   [
     body('email').isEmail().withMessage('Please provide a valid email'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('name').notEmpty().withMessage('Name is required'),
+    body('firstName').notEmpty().withMessage('First name is required'),
     body('phone').notEmpty().withMessage('Phone number is required'),
   ],
   async (req, res) => {
@@ -24,7 +22,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, email, phone, address, password } = req.body;
+      const { firstName, lastName, email, phone, address, password } = req.body;
 
       // Validate phone number (at least 10 digits)
       const phoneDigits = phone.replace(/\D/g, '');
@@ -32,15 +30,15 @@ router.post(
         return res.status(400).json({ message: 'Phone number must be at least 10 digits' });
       }
 
-      // Check if user already exists
-      const userExists = users.find((u) => u.email === email);
+      // Check if user already exists by email
+      let userExists = await User.findOne({ email });
       if (userExists) {
         return res.status(400).json({ message: 'User already exists with this email' });
       }
 
       // Check if phone already exists
-      const phoneExists = users.find((u) => u.phone === phone);
-      if (phoneExists) {
+      userExists = await User.findOne({ phone });
+      if (userExists) {
         return res.status(400).json({ message: 'User already exists with this phone number' });
       }
 
@@ -48,21 +46,39 @@ router.post(
       const salt = await bcryptjs.genSalt(10);
       const hashedPassword = await bcryptjs.hash(password, salt);
 
-      // Create new user
-      const newUser = {
-        id: users.length + 1,
-        name,
+      // Create new user in MongoDB
+      const newUser = new User({
+        firstName,
+        lastName: lastName || '',
         email,
         phone,
         address: address || null,
         password: hashedPassword,
-        createdAt: new Date(),
-      };
+      });
 
-      users.push(newUser);
+      await newUser.save();
 
-      res.status(201).json({ message: 'User created successfully' });
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: newUser._id, email: newUser.email },
+        process.env.JWT_SECRET || 'your_jwt_secret_key',
+        { expiresIn: '7d' }
+      );
+
+      res.status(201).json({
+        message: 'User created successfully',
+        token,
+        user: {
+          id: newUser._id,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          email: newUser.email,
+          phone: newUser.phone,
+          address: newUser.address,
+        },
+      });
     } catch (error) {
+      console.error('Signup error:', error);
       res.status(500).json({ message: 'Server error during signup' });
     }
   }
@@ -84,8 +100,8 @@ router.post(
 
       const { email, password } = req.body;
 
-      // Find user
-      const user = users.find((u) => u.email === email);
+      // Find user in MongoDB
+      const user = await User.findOne({ email });
       if (!user) {
         return res.status(400).json({ message: 'Invalid email or password' });
       }
@@ -98,7 +114,7 @@ router.post(
 
       // Generate JWT token
       const token = jwt.sign(
-        { id: user.id, email: user.email },
+        { id: user._id, email: user.email },
         process.env.JWT_SECRET || 'your_jwt_secret_key',
         { expiresIn: '7d' }
       );
@@ -107,14 +123,16 @@ router.post(
         message: 'Login successful',
         token,
         user: {
-          id: user.id,
-          name: user.name,
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
           email: user.email,
           phone: user.phone,
           address: user.address,
         },
       });
     } catch (error) {
+      console.error('Login error:', error);
       res.status(500).json({ message: 'Server error during login' });
     }
   }

@@ -82,7 +82,7 @@ const Home = () => {
       <div className="dashboard-header">
         <div className="header-left">
           <h1>Dashboard</h1>
-          <p className="header-subtitle">Welcome back, {user?.name || 'User'} 👋</p>
+          <p className="header-subtitle">Welcome back, {user?.firstName || 'User'} 👋</p>
         </div>
         <button onClick={handleLogout} className="btn-logout">Logout</button>
       </div>
@@ -90,7 +90,7 @@ const Home = () => {
       {/* Welcome Section */}
       <div className="welcome-section">
         <div className="welcome-content">
-          <h2>Welcome back, <span className="user-name">{user?.name || 'User'}</span> 👋</h2>
+          <h2>Welcome back, <span className="user-name">{user?.firstName || 'User'}</span> 👋</h2>
           <p className="welcome-subtitle">Email: {user?.email}</p>
           <p className="welcome-description">Manage your home service bookings in one place.</p>
         </div>

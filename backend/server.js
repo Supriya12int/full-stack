@@ -27,6 +27,7 @@ connectDB();
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/bookings', require('./routes/bookings'));
 
 // Basic route
 app.get('/', (req, res) => {

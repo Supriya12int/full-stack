@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 import '../styles/BookingForm.css';
 
 const BookingForm = ({ service, onClose }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -13,6 +16,7 @@ const BookingForm = ({ service, onClose }) => {
   });
 
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,54 +26,74 @@ const BookingForm = ({ service, onClose }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     
-    // Create a booking object with service details
-    const newBooking = {
-      id: Date.now(), // Use timestamp as unique ID
-      service: service?.name || 'Service',
-      date: formData.date,
-      time: formData.time,
-      technician: 'Assigned Soon',
-      status: 'Pending',
-      bookingDetails: {
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        address: formData.address,
-        serviceId: formData.serviceId
+    try {
+      if (!user || !user.id) {
+        throw new Error('User information missing');
       }
-    };
 
-    // Get existing bookings from localStorage
-    const existingBookings = localStorage.getItem('userBookings');
-    const bookings = existingBookings ? JSON.parse(existingBookings) : [];
-    
-    // Add new booking
-    bookings.push(newBooking);
-    
-    // Save back to localStorage
-    localStorage.setItem('userBookings', JSON.stringify(bookings));
-    
-    // Dispatch event to notify dashboard to refresh
-    window.dispatchEvent(new Event('bookingUpdated'));
-
-    console.log('Booking submitted:', newBooking);
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({
-        name: '',
-        phone: '',
-        email: '',
-        date: '',
-        time: '',
-        address: '',
+      // Create booking object with service details
+      const bookingData = {
+        service: service?.name || 'Service',
         serviceId: service?.id || null,
+        date: formData.date,
+        time: formData.time,
+        bookingDetails: {
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          serviceType: service?.title || service?.name
+        }
+      };
+
+      console.log('Submitting booking with user ID:', user.id);
+
+      // Send booking to backend
+      const response = await axios.post('http://localhost:5000/api/bookings/create', bookingData, {
+        headers: {
+          'user-id': user.id,
+          'Content-Type': 'application/json',
+        }
       });
-      onClose();
-    }, 2000);
+
+      console.log('Booking response:', response);
+
+      if (response.status === 201) {
+        // Also save to localStorage for backward compatibility
+        const existingBookings = localStorage.getItem('userBookings');
+        const bookings = existingBookings ? JSON.parse(existingBookings) : [];
+        bookings.push(response.data.booking);
+        localStorage.setItem('userBookings', JSON.stringify(bookings));
+        
+        // Dispatch event to notify dashboard to refresh
+        window.dispatchEvent(new Event('bookingUpdated'));
+
+        console.log('Booking submitted:', response.data.booking);
+        setSubmitted(true);
+        setTimeout(() => {
+          setSubmitted(false);
+          setFormData({
+            name: '',
+            phone: '',
+            email: '',
+            date: '',
+            time: '',
+            address: '',
+            serviceId: service?.id || null,
+          });
+          onClose();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      alert('Error creating booking: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
